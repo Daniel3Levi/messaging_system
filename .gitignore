@@ -1,0 +1,12 @@
+# .gitignore
+.env
+
+# Ignore database files
+*.sqlite3
+
+# Ignore static files and media files (only if using local development)
+/static/
+/media/
+
+# Ignore Python bytecode files
+__pycache__/
