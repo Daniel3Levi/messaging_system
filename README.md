@@ -20,7 +20,7 @@ It provides a simple and efficient platform for users to send, receive, and mana
    git clone https://github.com/yourusername/messaging-system.git
 
 ### Overview of the available API endpoints
-**API Entry Point:** /api/v1
+**API Entry Point:** `/api/v1`
 
 ### User Authentication
 
