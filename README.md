@@ -6,12 +6,11 @@ It provides a simple and efficient platform for users to send, receive, and mana
 ## Features
 
 - User registration and login with token-based authentication.
-- Create, Read, Update, and Delete (CRUD) operations for messages.
+- Create, Read, Update operations for messages.
 - View all messages for a specific user.
 - Retrieve unread messages.
 - Mark messages as read.
 - Filter messages based on sender, receiver, and read status.
-- Secure PostgreSQL database storage.
 
 ## Installation
 
