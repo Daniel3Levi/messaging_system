@@ -1,6 +1,6 @@
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.models import User
-from rest_framework import generics, permissions, status
+from rest_framework import generics, permissions
 from rest_framework.permissions import AllowAny
 from .tokens import create_jwt_pair
 from .serializers import UserRegistrationSerializer, UserLoginSerializer, MessageSerializer

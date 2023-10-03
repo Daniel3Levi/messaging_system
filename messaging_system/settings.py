@@ -15,7 +15,9 @@ from decouple import config
 from datetime import timedelta
 ...
 
+
 SIMPLE_JWT = {
+
     "ACCESS_TOKEN_LIFETIME": timedelta(hours=4),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
     "SIGNING_KEY": 'django-insecure-u%pt(-%jh4xraj1v&^q$&d%s04ua+5t8e-^vwo)4i3(e^wiuqx',
