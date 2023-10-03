@@ -2,11 +2,8 @@ from django.contrib.auth import authenticate, login
 from django.contrib.auth.models import User
 from rest_framework import generics, permissions, status
 from rest_framework.permissions import AllowAny
-from rest_framework.response import Response
-
-from .models import Message
+from .tokens import create_jwt_pair
 from .serializers import UserRegistrationSerializer, UserLoginSerializer, MessageSerializer
-from rest_framework.authtoken.models import Token
 
 
 # User Views
@@ -66,13 +63,13 @@ class UserLoginView(generics.GenericAPIView):
             # If authentication is successful, log in the user
             login(request, user)
 
-            # Generate or retrieve a token for the user
-            token, created = Token.objects.get_or_create(user=user)
+            # Generate or retrieve a JWT token for the user
+            tokens = create_jwt_pair(user)
 
             # Customize the response for a successful login
             response = {
                 'detail': 'User logged in successfully',
-                'token': token.key
+                'token': tokens
             }
             return Response(data=response, status=status.HTTP_200_OK)
         else:

@@ -11,7 +11,18 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
 from pathlib import Path
-from decouple import config, Csv
+from decouple import config
+from datetime import timedelta
+...
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(hours=4),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
+    "SIGNING_KEY": 'django-insecure-u%pt(-%jh4xraj1v&^q$&d%s04ua+5t8e-^vwo)4i3(e^wiuqx',
+    "AUTH_HEADER_TYPES": ("Bearer",)
+
+
+}
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -40,7 +51,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'messaging_app',
-    'rest_framework.authtoken',
+    'rest_framework_simplejwt',
     'rest_framework',
     'corsheaders',
     'psycopg2',
@@ -59,7 +70,7 @@ MIDDLEWARE = [
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework.authentication.TokenAuthentication',
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
 }
 
