@@ -1,18 +1,17 @@
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.models import User
-from rest_framework import generics, permissions
+from rest_framework import permissions, status
 from rest_framework.permissions import AllowAny
+from .models import Message
 from .tokens import create_jwt_pair
 from .serializers import UserRegistrationSerializer, UserLoginSerializer, MessageSerializer
+from rest_framework import viewsets
+from rest_framework.response import Response
 
 
 # User Views
 
-
-class UserRegistrationView(generics.CreateAPIView):
-    # Define the queryset (usually not needed for registration)
-    queryset = User.objects.all()
-
+class UserRegistrationViewSet(viewsets.ModelViewSet):
     # Use the serializer for user registration
     serializer_class = UserRegistrationSerializer
 
@@ -39,24 +38,23 @@ class UserRegistrationView(generics.CreateAPIView):
             response = {
                 'detail': 'User registration failed',
                 'error': serializer_errors
-
             }
             return Response(data=response, status=response.status_code)
 
 
-class UserLoginView(generics.GenericAPIView):
+class UserLoginViewSet(viewsets.ViewSet):
     # Set the serializer class for login
     serializer_class = UserLoginSerializer
 
     # Allow any user, including unauthenticated users, to access this view
     permission_classes = [AllowAny]
 
-    def post(self, request, *args, **kwargs):
+    def create(self, request, *args, **kwargs):
         # Get the username and password from the request data
         username = request.data.get('username')
         password = request.data.get('password')
 
-        # Authenticate the user with built-in django function
+        # Authenticate the user with built-in Django function
         user = authenticate(request, username=username, password=password)
 
         if user:
@@ -85,26 +83,34 @@ class UserLoginView(generics.GenericAPIView):
 
 # Messages Views
 
-
-class MessageCreateView(generics.CreateAPIView):
+class NewMessageViewSet(viewsets.ModelViewSet):
     serializer_class = MessageSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def perform_create(self, serializer):
         # Set the sender as the logged-in user
-        serializer.validated_data['sender'] = self.request.user
+        serializer.save(sender=self.request.user)
 
-        receiver_email = self.request.data.get('receiver', '')
+    def create(self, request, *args, **kwargs):
+        receiver_email = request.data.get('receiver', '')
 
         try:
             # Resolve the receiver user object based on their email address
             receiver_user = User.objects.get(email=receiver_email)
-            serializer.validated_data['receiver'] = receiver_user
 
+            # Check if the sender is the same as the receiver
+            if receiver_user == self.request.user:
+                response = {
+                    'error': 'Sender and receiver cannot be the same'
+                }
+                return Response(data=response, status=status.HTTP_400_BAD_REQUEST)
+
+            serializer = self.get_serializer(data=request.data)
             if serializer.is_valid():
-                # Create the message
-                serializer.save()
-                return Response(data=serializer.data, status=status.HTTP_201_CREATED)
+                # Set the sender and receiver and create the message
+                serializer.save(sender=self.request.user, receiver=receiver_user)
+                headers = self.get_success_headers(serializer.data)
+                return Response(data=serializer.data, status=status.HTTP_201_CREATED, headers=headers)
             else:
                 return Response(data=serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except User.DoesNotExist:
@@ -114,7 +120,7 @@ class MessageCreateView(generics.CreateAPIView):
             return Response(data=response, status=status.HTTP_400_BAD_REQUEST)
 
 
-class MessageDetailView(generics.RetrieveUpdateDestroyAPIView):
+class ReadMessageViewSet(viewsets.ModelViewSet):
     serializer_class = MessageSerializer
     permission_classes = [permissions.IsAuthenticated]
 
@@ -129,7 +135,7 @@ class MessageDetailView(generics.RetrieveUpdateDestroyAPIView):
         if instance.receiver != self.request.user:
             # If the user is not the receiver, return a 403 Forbidden response
             response = {
-                'detail': 'Somthing went wrong while trying to retrieve the message. ',
+                'detail': 'Something went wrong while trying to retrieve the message.',
                 'error': 'You can only mark messages as read if you are the receiver.'
             }
             return Response(data=response, status=status.HTTP_403_FORBIDDEN)
@@ -149,19 +155,13 @@ class MessageDetailView(generics.RetrieveUpdateDestroyAPIView):
         return Response(data=response, status=status.HTTP_200_OK)
 
 
-from rest_framework import generics, permissions, status
-from rest_framework.response import Response
-from .models import Message
-from .serializers import MessageSerializer
-
-
-class UnreadMessageListView(generics.ListAPIView):
+class UnreadMessagesViewSet(viewsets.ModelViewSet):
     serializer_class = MessageSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def list(self, request, *args, **kwargs):
         # Get the queryset of unread messages for the current user
-        queryset = self.get_queryset()
+        queryset = self.get_queryset().filter(is_read=False)
 
         # Serialize the unread messages
         serializer = self.get_serializer(queryset, many=True)
@@ -176,11 +176,11 @@ class UnreadMessageListView(generics.ListAPIView):
         return Response(data=response, status=status.HTTP_200_OK)
 
     def get_queryset(self):
-        # Filter messages to only include unread messages received by the user
-        return Message.objects.filter(receiver=self.request.user, is_read=False)
+        # Filter messages to only include messages received by the user
+        return Message.objects.filter(receiver=self.request.user)
 
 
-class SentMessagesListView(generics.ListAPIView):
+class SentMessagesViewSet(viewsets.ModelViewSet):
     serializer_class = MessageSerializer
     permission_classes = [permissions.IsAuthenticated]
 
@@ -205,7 +205,8 @@ class SentMessagesListView(generics.ListAPIView):
         return Message.objects.filter(sender=self.request.user)
 
 
-class ReceivedMessagesListView(generics.ListAPIView):
+class ReceivedMessagesViewSet(viewsets.ModelViewSet):
+
     serializer_class = MessageSerializer
     permission_classes = [permissions.IsAuthenticated]
 
