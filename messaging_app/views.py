@@ -1,19 +1,17 @@
 from django.contrib.auth import authenticate, login
-from django.contrib.auth.models import User
 from rest_framework import permissions, status
-from rest_framework.permissions import AllowAny
-from .models import Message
 from .tokens import create_jwt_pair
-from .serializers import UserRegistrationSerializer, UserLoginSerializer, MessageSerializer
 from rest_framework import viewsets
+from .models import Message
+from .serializers import UserRegistrationSerializer, UserLoginSerializer
+from .serializers import MessageSerializer
 from rest_framework.response import Response
 
 
 # User Views
-
 class UserRegistrationViewSet(viewsets.ModelViewSet):
     serializer_class = UserRegistrationSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [permissions.AllowAny]
 
     def create(self, request, *args, **kwargs):
         response = super().create(request, *args, **kwargs)
@@ -34,7 +32,7 @@ class UserRegistrationViewSet(viewsets.ModelViewSet):
 
 class UserLoginViewSet(viewsets.ViewSet):
     serializer_class = UserLoginSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [permissions.AllowAny]
 
     def create(self, request, *args, **kwargs):
         username = request.data.get('username')
@@ -61,114 +59,151 @@ class UserLoginViewSet(viewsets.ViewSet):
 
 
 # Messages Views
-
-class NewMessageViewSet(viewsets.ModelViewSet):
+class CreateMessageViewSet(viewsets.ModelViewSet):
+    queryset = Message.objects.all()
     serializer_class = MessageSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def perform_create(self, serializer):
-        # Set the sender as the logged-in user
-        serializer.save(sender=self.request.user)
-
-    def create(self, request, *args, **kwargs):
-        receiver_email = request.data.get('receiver', '')
-
-        try:
-            receiver_user = User.objects.get(email=receiver_email)
-
-            serializer = self.get_serializer(data=request.data)
-            if serializer.is_valid():
-                serializer.save(sender=self.request.user, receiver=receiver_user)
-                headers = self.get_success_headers(serializer.data)
-                return Response(data=serializer.data, status=status.HTTP_201_CREATED, headers=headers)
-            else:
-                return Response(data=serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        except User.DoesNotExist:
+        if serializer.is_valid():
+            serializer = serializer.save(sender=self.request.user)
             response = {
-                'error': 'Receiver does not exist'
+                "detail": "New message send successfully.",
+                "data": serializer.data
             }
-            return Response(data=response, status=status.HTTP_400_BAD_REQUEST)
+            return Response(data=response, status=status.HTTP_201_CREATED)
+        else:
+            response = {
+                "error": "An error occurred while sending the message.",
+                "data": serializer.errors
+            }
+            return Response(data=response, status=response.status_code)
 
 
 class ReadMessageViewSet(viewsets.ModelViewSet):
+    queryset = Message.objects.all()
     serializer_class = MessageSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    def get_queryset(self):
-        return Message.objects.filter(receiver=self.request.user)
+    def retrieve(self, request, *args, **kwargs):
+        message = self.get_object()
+        user = request.user
 
-    def partial_update(self, request, *args, **kwargs):
-        instance = self.get_object()
-        if instance.receiver != self.request.user:
+        if message.sender == user and message.sender_deleted:
             response = {
-                'detail': 'Something went wrong while trying to retrieve the message.',
-                'error': 'You can only mark messages as read if you are the receiver.'
+                "detail:" "Message has been deleted by the sender."
             }
-            return Response(data=response, status=status.HTTP_403_FORBIDDEN)
-        elif instance.is_read:
-            message = self.get_serializer(instance).data
+            return Response(data=response, status=status.HTTP_410_GONE)
+
+        if message.receivers.filter(user=user).exists():
+            receiver = message.receivers.filter(user=user).first()
+            if receiver and not receiver.is_read:
+                receiver.is_read = True
+                receiver.save()
+        else:
             response = {
-                'data': message
+                "detail:" "The user is not in the receivers list of the message."
+            }
+            return Response(data=response, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = self.get_serializer(message)
+        return Response(data=serializer.data, status=status.HTTP_200_OK)
+
+
+class DeleteMessageViewSet(viewsets.ModelViewSet):
+    queryset = Message.objects.all()
+    serializer_class = MessageSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def retrieve(self, request, pk=None):
+        message = self.get_object()
+        user = request.user
+
+        if message.sender == user:
+            message.sender_deleted = True
+            message.save()
+            response = {
+                "detail": "Sender delete the message successfully."
             }
             return Response(data=response, status=status.HTTP_200_OK)
 
-        instance.is_read = True
-        instance.save()
-        updated_message = self.get_serializer(instance).data
-        response = {
-            'detail': 'Message updated successfully.',
-            'data': updated_message
-        }
-        return Response(data=response, status=status.HTTP_202_ACCEPTED)
+        if message.receivers.filter(user=user).exists():
+            receiver = message.receivers.get(user=user)
+            receiver.delete()
+            response = {
+                "detail": "Relationship removed from the message."
+            }
+            return Response(data=response, status=status.HTTP_200_OK)
+
+        if message.receivers.count() == 0 and message.sender_deleted:
+            message.delete()
+            response = {
+                "detail": "Message deleted by all users."
+            }
+            return Response(data=response, status=status.HTTP_204_NO_CONTENT)
 
 
-class UnreadMessagesViewSet(viewsets.ModelViewSet):
+class ReceivedMessagesViewSet(viewsets.ModelViewSet):
     serializer_class = MessageSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def get_queryset(self):
+        user = self.request.user
+        return Message.objects.filter(receivers__user=user)
+
     def list(self, request, *args, **kwargs):
-        queryset = self.get_queryset().filter(is_read=False)
+        user = self.request.user
+        queryset = Message.objects.filter(receivers__user=user)
+
         serializer = self.get_serializer(queryset, many=True)
+
         response = {
-            'messages_count': queryset.count(),
+            'message_count': queryset.count(),
             'messages': serializer.data
         }
-        return Response(data=response, status=status.HTTP_200_OK)
 
-    def get_queryset(self):
-        return Message.objects.filter(receiver=self.request.user)
+        return Response(data=response, status=status.HTTP_200_OK)
 
 
 class SentMessagesViewSet(viewsets.ModelViewSet):
     serializer_class = MessageSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def get_queryset(self):
+        user = self.request.user
+        return Message.objects.filter(sender=user, sender_deleted=False)
+
     def list(self, request, *args, **kwargs):
         queryset = self.get_queryset()
         serializer = self.get_serializer(queryset, many=True)
+
         response = {
             'messages_count': queryset.count(),
-            'messages': serializer.data
+            'messages': serializer.data,
         }
+
         return Response(data=response, status=status.HTTP_200_OK)
 
-    def get_queryset(self):
-        return Message.objects.filter(sender=self.request.user)
 
-
-class ReceivedMessagesViewSet(viewsets.ModelViewSet):
-
+class UnreadMessageViewSet(viewsets.ModelViewSet):
+    queryset = Message.objects.all()
     serializer_class = MessageSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def get_queryset(self):
+        user = self.request.user
+        return Message.objects.filter(receivers__user=user, receivers__is_read=False)
+
     def list(self, request, *args, **kwargs):
-        queryset = self.get_queryset()
+        user = self.request.user
+        queryset = Message.objects.filter(receivers__user=user, receivers__is_read=False)
+
         serializer = self.get_serializer(queryset, many=True)
+
         response = {
-            'messages_count': queryset.count(),
+            'message_count': queryset.count(),
             'messages': serializer.data
         }
+
         return Response(data=response, status=status.HTTP_200_OK)
 
-    def get_queryset(self):
-        return Message.objects.filter(receiver=self.request.user)
