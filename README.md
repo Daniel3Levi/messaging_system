@@ -17,7 +17,7 @@ It provides a simple and efficient platform for users to send, receive, and mana
 1. Clone the repository to your local machine:
 
    ```bash
-   git clone https://github.com/yourusername/messaging-system.git
+   git clone https://github.com/daniel3levi/messaging-system.git
 
 ### Overview of the available API endpoints
 **API Entry Point:** `/api/v1`
