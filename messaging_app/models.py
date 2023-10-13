@@ -3,18 +3,18 @@ from django.contrib.auth.models import User
 
 
 class Message(models.Model):
-    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_messages')
-    body = models.TextField()
-    subject = models.CharField(max_length=100)
     creation_date = models.DateTimeField(auto_now_add=True)
-    sender_deleted = models.BooleanField(default=False)
+    subject = models.CharField(max_length=100)
+    body = models.TextField()
 
     def __str__(self):
         return 'Subject:' + self.subject
 
 
-class Receivers(models.Model):
-    message = models.ForeignKey(Message, on_delete=models.CASCADE, related_name="receivers")
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="user")
+class MessageRelationship(models.Model):
+    message = models.ForeignKey(Message, on_delete=models.CASCADE, related_name="message_relationship")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="user_relationship")
+    is_recipient = models.BooleanField(default=False)
+    is_sender = models.BooleanField(default=False)
     is_read = models.BooleanField(default=False)
 

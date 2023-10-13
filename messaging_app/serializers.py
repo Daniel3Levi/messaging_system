@@ -1,10 +1,9 @@
 from django.contrib.auth.models import User
 from rest_framework import serializers
-from .models import Message, Receivers
+from .models import Message, MessageRelationship
+
 
 # User Auth Serializers
-
-
 class UserRegistrationSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
@@ -26,61 +25,42 @@ class UserLoginSerializer(serializers.Serializer):
 
 
 # Messages Serializers
-
-class ReceiversSerializer(serializers.ModelSerializer):
-
-    receiver_email = serializers.EmailField(write_only=True, required=True)
-
+class MessageRelationshipSerializer(serializers.ModelSerializer):
     class Meta:
-        model = Receivers
-        fields = ('receiver_email', 'is_read')
-
-    def create(self, validated_data):
-        receiver_email = validated_data.pop('receiver_email')
-        try:
-            user = User.objects.get(email=receiver_email)
-        except User.DoesNotExist:
-            raise serializers.ValidationError(f"User with email '{receiver_email}' does not exist.")
-        validated_data['is_read'] = False
-        receivers = Receivers.objects.create(user=user, **validated_data)
-        return receivers
+        model = MessageRelationship
+        fields = ['user', 'is_recipient', 'is_sender', 'is_read']
 
 
 class MessageSerializer(serializers.ModelSerializer):
-    sender = serializers.EmailField(source='sender.email', read_only=True)
-    receivers = ReceiversSerializer(many=True)
+    message_relationship = MessageRelationshipSerializer(many=True)
 
     class Meta:
         model = Message
-        fields = ('id', 'sender', 'subject', 'body', 'sender_deleted', 'receivers')
-        read_only_fields = ['sender']
+        fields = ['id', 'subject', 'body', 'creation_date', 'message_relationship']
 
     def create(self, validated_data):
-        receivers_data = validated_data.pop('receivers')
+
         message = Message.objects.create(**validated_data)
 
-        for receiver_data in receivers_data:
-            receiver_email = receiver_data.pop('receiver_email')
-            user = User.objects.get(email=receiver_email)
-            Receivers.objects.create(message=message, user=user, **receiver_data)
+        message_relationship_data = validated_data.pop('message_relationship', [])
+
+        current_user = self.context['request'].user
+        MessageRelationship.objects.create(
+            message=message,
+            user=current_user,
+            is_sender=True,
+            is_read=False,
+            is_recipient=False
+        )
+
+        for relationship_data in message_relationship_data:
+            MessageRelationship.objects.create(
+                message=message,
+                user=relationship_data['user'],
+                is_sender=relationship_data['is_sender'],
+                is_read=relationship_data['is_read'],
+                is_recipient=relationship_data['is_recipient']
+            )
 
         return message
 
-    def get_is_read(self, obj):
-        user = self.context['request'].user
-        try:
-            receiver = obj.receivers.get(user=user)
-            return receiver.is_read
-        except Receivers.DoesNotExist:
-            return False
-
-    def to_representation(self, instance):
-        representation = super().to_representation(instance)
-        representation['receivers'] = [
-            {
-                "receiver_email": receiver.user.email,
-                "is_read": receiver.is_read,
-            }
-            for receiver in instance.receivers.all()
-        ]
-        return representation
