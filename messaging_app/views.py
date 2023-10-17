@@ -3,16 +3,22 @@ from django.db.models import Q
 from rest_framework import permissions, status
 from rest_framework.decorators import action
 from .tokens import create_jwt_pair
-from rest_framework import viewsets
+from rest_framework import viewsets, filters
 from .serializers import UserRegistrationSerializer, UserLoginSerializer, MessageSerializer
 from .models import Message, MessageRelationship
 from rest_framework.response import Response
+from django_filters.rest_framework import DjangoFilterBackend
+from django.contrib.auth.models import User
 
 
 # User Views
 class UserRegistrationViewSet(viewsets.ModelViewSet):
     serializer_class = UserRegistrationSerializer
     permission_classes = [permissions.AllowAny]
+    queryset = User.objects.all()
+
+    def get_queryset(self):
+        return User.objects.all()
 
     def create(self, request, *args, **kwargs):
         response = super().create(request, *args, **kwargs)
@@ -35,7 +41,7 @@ class UserLoginViewSet(viewsets.ViewSet):
     serializer_class = UserLoginSerializer
     permission_classes = [permissions.AllowAny]
 
-    def create(self, request):
+    def create(self, request, *args, **kwargs):
         username = request.data.get('username')
         password = request.data.get('password')
         user = authenticate(request, username=username, password=password)
@@ -61,10 +67,57 @@ class UserLoginViewSet(viewsets.ViewSet):
 
 # Messages Views
 class MessageViewSet(viewsets.ModelViewSet):
+    queryset = Message.objects.all()
     serializer_class = MessageSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter, filters.SearchFilter]
+
+    filter_fields = {
+        'message_relationship__user': ['exact'],
+        'message_relationship__is_sender': ['exact'],
+        'message_relationship__is_recipient': ['exact'],
+        'message_relationship__is_read': ['exact'],
+    }
+
+    ordering_fields = ['-creation_date', 'creation_date']
+    search_fields = ['subject', 'body']
+
+    def get_queryset(self):
+        user = self.request.user
+        filter_type = self.request.query_params.get('filter', None)
+        is_read = self.request.query_params.get('is_read', None)
+
+        queryset = Message.objects.filter(
+            Q(message_relationship__user=user, message_relationship__is_sender=True) |
+            Q(message_relationship__user=user, message_relationship__is_recipient=True)
+        ).distinct()
+
+        if filter_type == 'sent':
+            queryset = queryset.filter(
+                message_relationship__user=user,
+                message_relationship__is_sender=True
+            )
+        elif filter_type == 'received':
+            queryset = queryset.filter(
+                message_relationship__user=user,
+                message_relationship__is_recipient=True
+            )
+
+        if is_read == 'true':
+            queryset = queryset.filter(
+                message_relationship__user=user,
+                message_relationship__is_read=True
+            )
+        elif is_read == 'false':
+            queryset = queryset.filter(
+                message_relationship__user=user,
+                message_relationship__is_read=False
+            )
+
+        return queryset
 
     @action(detail=True, methods=['put'], url_path='update-is-read')
-    def update_is_read(self, request):
+    def update_is_read(self, request, pk=None):
         message = self.get_object()
         user = request.user
 
@@ -83,7 +136,7 @@ class MessageViewSet(viewsets.ModelViewSet):
             return Response(data=response, status=status.HTTP_403_FORBIDDEN)
 
     @action(detail=True, methods=['delete'], url_path='delete-relationship')
-    def delete_relationship(self, request):
+    def delete_relationship(self, request, pk=None):
         message = self.get_object()
         user = request.user
         try:
@@ -110,37 +163,4 @@ class MessageViewSet(viewsets.ModelViewSet):
             }
             return Response(data=response, status=status.HTTP_404_NOT_FOUND)
 
-    def get_queryset(self):
-        user = self.request.user
 
-        filter_type = self.request.query_params.get('filter', None)
-
-        queryset = Message.objects.filter(
-            Q(message_relationship__user=user, message_relationship__is_sender=True) |
-            Q(message_relationship__user=user, message_relationship__is_recipient=True)
-        ).distinct()
-
-        if filter_type == 'sent':
-            queryset = queryset.filter(
-                message_relationship__user=user,
-                message_relationship__is_sender=True
-            )
-        elif filter_type == 'received':
-            queryset = queryset.filter(
-                message_relationship__user=user,
-                message_relationship__is_recipient=True
-            )
-        elif filter_type == 'received_unread':
-            queryset = queryset.filter(
-                message_relationship__user=user,
-                message_relationship__is_recipient=True,
-                message_relationship__is_read=False
-            )
-        elif filter_type == 'received_read':
-            queryset = queryset.filter(
-                message_relationship__user=user,
-                message_relationship__is_recipient=True,
-                message_relationship__is_read=True
-            )
-
-        return queryset
