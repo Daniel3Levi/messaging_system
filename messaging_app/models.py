@@ -17,4 +17,3 @@ class MessageRelationship(models.Model):
     is_recipient = models.BooleanField(default=False)
     is_sender = models.BooleanField(default=False)
     is_read = models.BooleanField(default=False)
-
