@@ -6,6 +6,8 @@ class Message(models.Model):
     creation_date = models.DateTimeField(auto_now_add=True)
     subject = models.CharField(max_length=100)
     body = models.TextField()
+    sender = models.ForeignKey(User, related_name='sent_messages', on_delete=models.CASCADE)
+    recipients = models.ManyToManyField(User, related_name='received_messages')
 
     def __str__(self):
         return 'Subject:' + self.subject
@@ -17,3 +19,4 @@ class MessageRelationship(models.Model):
     is_recipient = models.BooleanField(default=False)
     is_sender = models.BooleanField(default=False)
     is_read = models.BooleanField(default=False)
+

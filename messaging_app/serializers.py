@@ -43,20 +43,31 @@ class MessageRelationshipSerializer(serializers.ModelSerializer):
 
 class MessageSerializer(serializers.ModelSerializer):
     message_relationship = MessageRelationshipSerializer(many=True)
+    sender_email = serializers.SerializerMethodField()
+    recipients = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
-        fields = ['id', 'subject', 'body', 'creation_date', 'message_relationship']
+        fields = ['id', 'sender_email', 'subject', 'body', 'creation_date', 'recipients', 'message_relationship']
+
+    def get_sender_email(self, obj):
+        return obj.sender.email
+
+    def get_recipients(self, obj):
+        return [user.email for user in obj.recipients.all()]
 
     def create(self, validated_data):
         message_relationship_data = validated_data.pop('message_relationship', [])
-        current_user = self.context['request'].user
+        sender_user = self.context['request'].user
 
-        message = Message.objects.create(**validated_data)
+        message = Message.objects.create(sender=sender_user, **validated_data)
+        recipients_users = []
+        failed_emails = []
 
+        # Create a MessageRelationship for the sender initially with is_sender=True
         sender_relationship = MessageRelationship.objects.create(
             message=message,
-            user=current_user,
+            user=sender_user,
             is_sender=True,
             is_read=False,
             is_recipient=False
@@ -64,21 +75,30 @@ class MessageSerializer(serializers.ModelSerializer):
 
         for relationship_data in message_relationship_data:
             user_email = relationship_data['user_email']
-            if user_email == current_user.email:
-                sender_relationship.is_recipient = True
-                sender_relationship.save()
-                continue
+            try:
+                user = User.objects.get(email=user_email)
+                recipients_users.append(user)
+                if user == sender_user:
+                    sender_relationship.is_recipient = True
+                    sender_relationship.save()
+                else:
+                    MessageRelationship.objects.create(
+                        message=message,
+                        user=user,
+                        is_sender=False,
+                        is_read=False,
+                        is_recipient=True
+                    )
+            except User.DoesNotExist:
+                failed_emails.append(user_email)
 
-            user = User.objects.get(email=user_email)
+        message.recipients.add(*recipients_users)
 
-            MessageRelationship.objects.create(
-                message=message,
-                user=user,
-                is_sender=False,
-                is_read=False,
-                is_recipient=True
-            )
+        if failed_emails:
+            raise serializers.ValidationError({
+                "user_email": f"Users with emails {', '.join(failed_emails)} do not exist. "
+                              f"However, the message was sent successfully to other recipients."
+            })
 
         return message
-
 

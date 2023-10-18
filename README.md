@@ -110,6 +110,59 @@ Get all user messages, filter, sort, and search messages using query parameters.
         1. `/messages/?search=<text>`
 - **Method:** GET
 
+### Message Payload Example 
+Request (POST new message)
+```` json
+{
+    "subject": "Hello from test.",
+    "body": "send to daniel and linoy.",
+    "message_relationship": [
+        {
+            "user_email": "daniel@gmail.com"
+        },
+        {
+            "user_email": "linoy@gmail.com"
+        }
+    ]
+}
+````
+### Message Payload Example 
+Response
+
+```` json
+{
+    "id": 1,
+    "sender_email": "test@gmail.com",
+    "subject": "Hello from test.",
+    "body": "send to daniel and linoy.",
+    "creation_date": "2023-10-18T11:23:39.012461Z",
+    "recipients": [
+        "daniel@gmail.com",
+        "linoy@gmail.com"
+    ],
+    "message_relationship": [
+        {
+            "is_recipient": false,
+            "is_sender": true,
+            "is_read": false,
+            "user_email": "test@gmail.com"
+        },
+        {
+            "is_recipient": true,
+            "is_sender": false,
+            "is_read": false,
+            "user_email": "daniel@gmail.com"
+        },
+        {
+            "is_recipient": true,
+            "is_sender": false,
+            "is_read": false,
+            "user_email": "linoy@gmail.com"
+        }
+    ]
+}
+````
+
 ## Authentication
 
 This API uses JWT (JSON Web Tokens) for authentication. To access protected endpoints, you need to include a JWT token in the Authorization header of your HTTP requests. Here's how you can obtain a JWT token:
