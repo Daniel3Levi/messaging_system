@@ -9,16 +9,25 @@ from .models import Message, MessageRelationship
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.contrib.auth.models import User
+from rest_framework.parsers import MultiPartParser, FormParser
 
 
 # User Views
 class UserRegistrationViewSet(viewsets.ModelViewSet):
-    serializer_class = UserRegistrationSerializer
-    permission_classes = [permissions.AllowAny]
-    queryset = User.objects.all()
 
-    def get_queryset(self):
-        return User.objects.all()
+    def get_permissions(self):
+        if self.action == 'list':
+            permission_classes = [permissions.IsAdminUser]
+        elif self.action == 'update':
+            permission_classes = [permissions.IsAuthenticated]
+        else:
+            permission_classes = [permissions.AllowAny]
+        return [permission() for permission in permission_classes]
+
+    serializer_class = UserRegistrationSerializer
+    parser_classes = [FormParser, MultiPartParser]
+
+    queryset = User.objects.all()
 
     def create(self, request, *args, **kwargs):
         response = super().create(request, *args, **kwargs)
@@ -35,6 +44,22 @@ class UserRegistrationViewSet(viewsets.ModelViewSet):
                 'error': serializer_errors
             }
             return Response(data=response, status=response.status_code)
+
+    def update(self, request, *args, **kwargs):
+        response = super().update(request, *args, **kwargs)
+
+        if response.status_code == status.HTTP_200_OK:
+            response = {
+                'detail': 'User profile updated successfully'
+            }
+            return Response(data=response, status=status.HTTP_200_OK)
+        else:
+            serializer_errors = response.data
+            response = {
+                'detail': 'Update user profile failed',
+                'error': serializer_errors
+            }
+        return response
 
 
 class UserLoginViewSet(viewsets.ViewSet):
@@ -69,7 +94,14 @@ class UserLoginViewSet(viewsets.ViewSet):
 class MessageViewSet(viewsets.ModelViewSet):
     queryset = Message.objects.all()
     serializer_class = MessageSerializer
-    permission_classes = [permissions.IsAuthenticated]
+
+    def get_permissions(self):
+        if self.action == 'delete' or self.action == 'update':
+            permission_classes = [permissions.IsAdminUser]
+        else:
+            permission_classes = [permissions.AllowAny]
+        return [permission() for permission in permission_classes]
+
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter, filters.SearchFilter]
 
     filter_fields = {
@@ -162,5 +194,3 @@ class MessageViewSet(viewsets.ModelViewSet):
                 "detail": "Message not found."
             }
             return Response(data=response, status=status.HTTP_404_NOT_FOUND)
-
-

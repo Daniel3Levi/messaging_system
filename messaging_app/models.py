@@ -1,5 +1,18 @@
 from django.db import models
 from django.contrib.auth.models import User
+import os
+
+
+def get_upload_path(instance, filename):
+    return os.path.join('Images', 'profile_pictures', str(instance.user.pk), filename)
+
+
+class UserProfile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    profile_picture = models.ImageField(upload_to=get_upload_path, blank=True, null=True)
+
+    def __str__(self):
+        return self.user.username
 
 
 class Message(models.Model):
@@ -19,4 +32,3 @@ class MessageRelationship(models.Model):
     is_recipient = models.BooleanField(default=False)
     is_sender = models.BooleanField(default=False)
     is_read = models.BooleanField(default=False)
-
