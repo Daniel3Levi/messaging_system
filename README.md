@@ -40,16 +40,43 @@ Before you begin, ensure you have met the following requirements:
 ## API Endpoints
 
 ### User Registration
+
+Get All users.
+
+- **Endpoint:** `/auth/register/`
+- **Method:** GET
+- **Permission:** IsAdminUser
+
 Register a new user.
 
 - **Endpoint:** `/auth/register/`
 - **Method:** POST
+- **Permission:** AllowAny
+```json
+{
+    "username": "test",
+    "email": "test@gmail.com",
+    "password": "test",
+    "profile_picture": ""
+}
+```
+Update profile picture:
+- **Endpoint:** `/auth/register/<user_id>/`
+- **Method:** PUT
+- **Permission:** IsAuthenticated
+```json
+{
+    "profile_picture": ""
+}
+```
 
 ### User Login
 Log in to the system to obtain an access token (JWT).
 
 - **Endpoint:** `/auth/login/`
 - **Method:** POST
+- - **Permission:** AllowAny
+
 
 ### JWT Token Generation
 Generate a new JWT token by providing valid user credentials.
@@ -74,24 +101,28 @@ Retrieve a list of messages and create new messages.
 
 - **Endpoint:** `/messages/`
 - **Methods:** POST (Create)
+- **Permission:** IsAuthenticated
 
 ### Delete Message 
 Delete relationship to a user if exists, or message (if the message has no user relationships).
 
 - **Endpoint:** `/messages/<message_id>/delete-relationship/`
 - **Methods:** DELETE (Delete message or relationship to a user)
+- **Permission:** IsAuthenticated
 
 ### Update Message
 Mark as read if the user is one of the recipients.
 
 - **Endpoint:** `/messages/<message_id>/update-is-read/`
 - **Methods:**  PUT (Update Read Status)
+- **Permission:** IsAuthenticated
 
 ### Message by ID
 Get user messages by ID.
 
 - **Endpoint:** `/messages/<message_id>`
 - **Method:** GET
+- **Permission:** IsAuthenticated
 
 ### Message List, Filter, Sort, and Search Messages
 Get all user messages, filter, sort, and search messages using query parameters.
@@ -109,6 +140,8 @@ Get all user messages, filter, sort, and search messages using query parameters.
     - search:
         1. `/messages/?search=<text>`
 - **Method:** GET
+- **Permission:** IsAuthenticated
+
 
 ### Message Payload Example 
 Request (POST new message)
