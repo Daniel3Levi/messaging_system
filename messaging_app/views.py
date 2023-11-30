@@ -5,11 +5,12 @@ from rest_framework.decorators import action
 from .tokens import create_jwt_pair
 from rest_framework import viewsets, filters
 from .serializers import UserRegistrationSerializer, UserLoginSerializer, MessageSerializer
-from .models import Message, MessageRelationship
+from .models import Message, MessageRelationship, UserProfile
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.contrib.auth.models import User
 from rest_framework.parsers import MultiPartParser, FormParser
+from django.core.files.storage import default_storage
 
 
 # User Views
@@ -30,36 +31,48 @@ class UserRegistrationViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
 
     def create(self, request, *args, **kwargs):
-        response = super().create(request, *args, **kwargs)
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            user = User.objects.create_user(
+                username=serializer.validated_data['username'],
+                email=serializer.validated_data['email'],
+                password=serializer.validated_data['password']
+            )
 
-        if response.status_code == status.HTTP_201_CREATED:
-            response = {
-                'detail': 'User registered successfully'
-            }
-            return Response(data=response, status=status.HTTP_201_CREATED)
+            profile_picture = request.data.get('profile_picture')
+            if profile_picture:
+                UserProfile.objects.create(user=user, profile_picture=profile_picture)
+
+            return Response({'detail': 'User registered successfully'}, status=status.HTTP_201_CREATED)
         else:
-            serializer_errors = response.data
-            response = {
-                'detail': 'User registration failed',
-                'error': serializer_errors
-            }
-            return Response(data=response, status=response.status_code)
+            return Response({'detail': 'User registration failed', 'error': serializer.errors},
+                            status=status.HTTP_400_BAD_REQUEST)
 
     def update(self, request, *args, **kwargs):
-        response = super().update(request, *args, **kwargs)
+        user = self.get_object()
+        if request.user != user:
+            return Response({'detail': 'You do not have permission to update this user.'},
+                            status=status.HTTP_403_FORBIDDEN)
 
-        if response.status_code == status.HTTP_200_OK:
-            response = {
-                'detail': 'User profile updated successfully'
-            }
-            return Response(data=response, status=status.HTTP_200_OK)
+        serializer = self.get_serializer(user, data=request.data, partial=True)
+        if serializer.is_valid():
+            user = serializer.save()
+
+            profile_picture = request.data.get('profile_picture')
+            if profile_picture:
+                user_profile_instance, created = UserProfile.objects.get_or_create(user=user)
+                image_file = user_profile_instance.profile_picture
+                if image_file:
+                    old_picture_path = image_file.name
+                    if default_storage.exists(old_picture_path):
+                        default_storage.delete(old_picture_path)
+                user_profile_instance.profile_picture = profile_picture
+                user_profile_instance.save()
+
+            return Response({'detail': 'User profile updated successfully'}, status=status.HTTP_200_OK)
         else:
-            serializer_errors = response.data
-            response = {
-                'detail': 'Update user profile failed',
-                'error': serializer_errors
-            }
-        return response
+            return Response({'detail': 'Update user profile failed', 'error': serializer.errors},
+                            status=status.HTTP_400_BAD_REQUEST)
 
 
 class UserLoginViewSet(viewsets.ViewSet):
@@ -101,6 +114,65 @@ class MessageViewSet(viewsets.ModelViewSet):
         else:
             permission_classes = [permissions.AllowAny]
         return [permission() for permission in permission_classes]
+
+    def create(self, request, *args, **kwargs):
+        data = request.data
+        sender_user = request.user
+        message_relationship_data = data.pop('message_relationship', [])
+
+        message = Message.objects.create(sender=sender_user, **data)
+        recipients_users = []
+        failed_emails = []
+
+        # Create a MessageRelationship for the sender initially with is_sender=True
+        sender_relationship = MessageRelationship.objects.create(
+            message=message,
+            user=sender_user,
+            is_sender=True,
+            is_read=False,
+            is_recipient=False
+        )
+
+        for relationship_data in message_relationship_data:
+            user_email = relationship_data.get('user_email')
+            try:
+                user = User.objects.get(email=user_email)
+                if user == sender_user:
+                    sender_relationship.is_recipient = True
+                    sender_relationship.save()
+                elif user in recipients_users:
+                    # How to handle duplicate recipient?
+                    continue
+                else:
+                    MessageRelationship.objects.create(
+                        message=message,
+                        user=user,
+                        is_sender=False,
+                        is_read=False,
+                        is_recipient=True
+                    )
+                    recipients_users.append(user)
+
+            except User.DoesNotExist:
+                failed_emails.append(user_email)
+
+        message.recipients.add(*recipients_users)
+
+        if failed_emails:
+            return Response({
+                "error": f"Users with emails {', '.join(failed_emails)} do not exist. "
+                         f"However, the message was sent successfully to other recipients.",
+                "message": message.id
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        elif message.recipients.count() == 0:
+            message.delete()
+            return Response({
+                "error": "No valid recipients found. Message not sent."
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = self.get_serializer(message)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter, filters.SearchFilter]
 

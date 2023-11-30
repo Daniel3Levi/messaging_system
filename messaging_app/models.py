@@ -4,15 +4,14 @@ import os
 
 
 def get_upload_path(instance, filename):
-    return os.path.join('Images', 'profile_pictures', str(instance.user.pk), filename)
+    return os.path.join('assets', 'profile_pictures', str(instance.user.pk), filename)
 
 
 class UserProfile(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
     profile_picture = models.ImageField(upload_to=get_upload_path, blank=True, null=True)
 
     def __str__(self):
-        return self.user.username
+        return f"User profile object - {self.user.username}"
 
 
 class Message(models.Model):
