@@ -172,7 +172,7 @@ Response
     "recipients": [
         "daniel@gmail.com",
         "linoy@gmail.com",
-        "test@gmail.com ]
+        "test@gmail.com" ]
 }
 ````
 
