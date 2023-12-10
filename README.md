@@ -15,7 +15,7 @@ Welcome to Messaging System API, a RESTful API backend built with Django Rest Fr
 - User registration and login
 - Sending and receiving messages
 - Message filtering, sorting, and searching
-- Marking messages as read
+- Marking messages as read or unread
 - Deleting messages
 
 ## Getting Started
@@ -43,7 +43,7 @@ Before you begin, ensure you have met the following requirements:
 
 Get All users.
 
-- **Endpoint:** `/auth/register/`
+- **Endpoint:** `/auth/users/`
 - **Method:** GET
 - **Permission:** IsAdminUser
 
@@ -57,13 +57,14 @@ Register a new user.
     "username": "test",
     "email": "test@gmail.com",
     "password": "test",
-    "profile_picture": ""
+    "profile_picture": "<File>"
 }
 ```
 Update profile picture:
-- **Endpoint:** `/auth/register/<user_id>/`
-- **Method:** PUT
+- **Endpoint:** `/auth/users/update_profile_picture/`
+- **Method:** PATCH
 - **Permission:** IsAuthenticated
+- 
 ```json
 {
     "profile_picture": ""
@@ -77,9 +78,15 @@ Log in to the system to obtain an access token (JWT).
 - **Method:** POST
 - - **Permission:** AllowAny
 
-
+```json
+{
+  "username": "test",
+  "password": 123456
+}
+```
 ### JWT Token Generation
 Generate a new JWT token by providing valid user credentials.
+Happens automatically as a new user is created.
 
 - **Endpoint:** `/jwt/create/`
 - **Method:** POST
@@ -106,22 +113,21 @@ Retrieve a list of messages and create new messages.
 ### Delete Message 
 Delete relationship to a user if exists, or message (if the message has no user relationships).
 
-- **Endpoint:** `/messages/<message_id>/delete-relationship/`
+- **Endpoint:** `/messages/<message_id>/`
 - **Methods:** DELETE (Delete message or relationship to a user)
 - **Permission:** IsAuthenticated
 
-### Update Message
+### Update Message - Is Read
 Mark as read if the user is one of the recipients.
 
-- **Endpoint:** `/messages/<message_id>/update-is-read/`
-- **Methods:**  PUT (Update Read Status)
+- **Endpoint:** `/messages/<message_id>/`
+- **Methods:**  GET 
 - **Permission:** IsAuthenticated
 
-### Message by ID
-Get user messages by ID.
+Mark as unread if the user is one of the recipients.
 
-- **Endpoint:** `/messages/<message_id>`
-- **Method:** GET
+- **Endpoint:** `/messages/<message_id>/unread-message/`
+- **Methods:**  PATCH
 - **Permission:** IsAuthenticated
 
 ### Message List, Filter, Sort, and Search Messages
@@ -148,17 +154,11 @@ Request (POST new message)
 ```` json
 {
     "subject": "Hello from test.",
-    "body": "send to daniel and linoy.",
-    "message_relationship": [
-        {
-            "user_email": "daniel@gmail.com"
-        },
-        {
-            "user_email": "linoy@gmail.com"
-        }
-    ]
+    "body": "send to daniel, linoy and test.",
+    "recipients": ["daniel@gmail.com", "linoy@gmail.com", "test@gmail.com"]
 }
 ````
+
 ### Message Payload Example 
 Response
 
@@ -167,32 +167,12 @@ Response
     "id": 1,
     "sender_email": "test@gmail.com",
     "subject": "Hello from test.",
-    "body": "send to daniel and linoy.",
+    "body": "send to daniel, linoy and test.",
     "creation_date": "2023-10-18T11:23:39.012461Z",
     "recipients": [
         "daniel@gmail.com",
-        "linoy@gmail.com"
-    ],
-    "message_relationship": [
-        {
-            "is_recipient": false,
-            "is_sender": true,
-            "is_read": false,
-            "user_email": "test@gmail.com"
-        },
-        {
-            "is_recipient": true,
-            "is_sender": false,
-            "is_read": false,
-            "user_email": "daniel@gmail.com"
-        },
-        {
-            "is_recipient": true,
-            "is_sender": false,
-            "is_read": false,
-            "user_email": "linoy@gmail.com"
-        }
-    ]
+        "linoy@gmail.com",
+        "test@gmail.com ]
 }
 ````
 

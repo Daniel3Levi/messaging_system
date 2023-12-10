@@ -1,6 +1,6 @@
 from django.contrib import admin
-from .models import Message, MessageRelationship, UserProfile
+from .models import Message, UserMessage, CustomUser
 
 admin.site.register(Message)
-admin.site.register(MessageRelationship)
-admin.site.register(UserProfile)
+admin.site.register(CustomUser)
+admin.site.register(UserMessage)

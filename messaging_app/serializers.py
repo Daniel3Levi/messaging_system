@@ -1,45 +1,32 @@
-from django.contrib.auth.models import User
 from rest_framework import serializers
-from .models import Message, MessageRelationship, UserProfile
-from django.core.validators import FileExtensionValidator
+from .models import Message, UserMessage, CustomUser
 
 
 # User Auth Serializers
 class UserRegistrationSerializer(serializers.ModelSerializer):
-    profile_picture = serializers.ImageField(write_only=True, required=False, use_url=True,
-                                             validators=[FileExtensionValidator(allowed_extensions=
-                                                                                ['jpg', 'jpeg', 'png', 'gif'])])
-
     class Meta:
-        model = User
+        model = CustomUser
         fields = ('username', 'email', 'password', 'profile_picture')
         extra_kwargs = {'password': {'write_only': True}}
 
-    def __init__(self, *args, **kwargs):
-        super(UserRegistrationSerializer, self).__init__(*args, **kwargs)
 
-        # Set required to False for username and password if it's an update
-        if self.instance is not None:
-            self.fields['username'].required = False
-            self.fields['password'].required = False
-
-
-class UserLoginSerializer(serializers.Serializer):
-    username = serializers.CharField(max_length=150)
-    password = serializers.CharField(write_only=True)
+class UserLoginSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomUser
+        fields = ('username', 'password')
 
 
 # Messages Serializers
-class MessageRelationshipSerializer(serializers.ModelSerializer):
+class UserMessageSerializer(serializers.ModelSerializer):
     user_email = serializers.EmailField(write_only=True)
 
     class Meta:
-        model = MessageRelationship
+        model = UserMessage
         fields = ['user_email', 'is_recipient', 'is_sender', 'is_read']
 
-    def get_user_email(self, message_relationship):
-        if message_relationship.user:
-            return message_relationship.user.email
+    def get_user_email(self, user_message):
+        if user_message.user:
+            return user_message.user.email
         else:
             return None
 
@@ -50,19 +37,30 @@ class MessageRelationshipSerializer(serializers.ModelSerializer):
 
 
 class MessageSerializer(serializers.ModelSerializer):
-    message_relationship = MessageRelationshipSerializer(many=True)
     sender_email = serializers.SerializerMethodField()
     recipients = serializers.SerializerMethodField()
 
     class Meta:
         model = Message
-        fields = ['id', 'sender_email', 'subject', 'body', 'creation_date', 'recipients', 'message_relationship']
+        fields = ['id', 'sender_email', 'subject', 'body', 'creation_date', 'recipients']
 
     def get_sender_email(self, message_object):
         return message_object.sender.email
 
-    def get_recipients(self, message_object):
-        emails = []
-        for user in message_object.recipients.all():
-            emails.append(user.email)
-        return emails
+    def get_recipients(self, message):
+        return [user.email for user in message.recipients.all()]
+
+
+class CustomUserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomUser
+        fields = ['profile_picture']
+
+
+class CustomUserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CustomUser
+        fields = ['username', "email", 'profile_picture']
+
+
+

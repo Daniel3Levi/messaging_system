@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import UserRegistrationViewSet, UserLoginViewSet, MessageViewSet
+from .views import UserRegistrationViewSet, UserLoginViewSet, MessageViewSet, CustomUserViewSet
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView, TokenVerifyView)
@@ -9,6 +9,7 @@ from rest_framework_simplejwt.views import (
 auth_router = DefaultRouter()
 auth_router.register(r'register', UserRegistrationViewSet, basename='register')
 auth_router.register(r'login', UserLoginViewSet, basename='login')
+auth_router.register(r'users', CustomUserViewSet, basename='users')
 # Messages
 message_router = DefaultRouter()
 message_router.register(r'messages', MessageViewSet, basename='messages')
