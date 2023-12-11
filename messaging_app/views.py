@@ -1,5 +1,3 @@
-import os
-
 from django.contrib.auth import authenticate, login
 from django.core.files.storage import default_storage
 from django.db.models import Q
@@ -89,18 +87,18 @@ class CustomUserViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(user, data=request.data, partial=True)
 
         if serializer.is_valid():
-            new_profile_picture = request.data.get('profile_picture')
-            if new_profile_picture:
+            # Check if the user already has a profile picture
+            if user.profile_picture and hasattr(user.profile_picture, 'file'):
                 old_picture_path = user.profile_picture.path
                 if old_picture_path and default_storage.exists(old_picture_path):
                     default_storage.delete(old_picture_path)
 
             serializer.save()
-            return Response({"detail": "Profile picture updated successfully.",
-                             "user": serializer.data}, status.HTTP_200_OK)
+            return Response({"detail": "Profile picture updated successfully.", "user": serializer.data},
+                            status.HTTP_200_OK)
         else:
             return Response(
-                {"detail": "Somthing went wrong while updating profile picture.", "error": serializer.errors},
+                {"detail": "Something went wrong while updating profile picture.", "error": serializer.errors},
                 status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -109,6 +107,11 @@ class MessageViewSet(viewsets.ModelViewSet):
     queryset = Message.objects.all()
     serializer_class = MessageSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.message = None
+        self.failed_emails = None
 
     def perform_create(self, serializer):
         sender_user = self.request.user
@@ -150,25 +153,31 @@ class MessageViewSet(viewsets.ModelViewSet):
 
         message.recipients.set(recipients_users)
 
-        if not message.recipients.count():
-            message.delete()
-            return Response({"error": "No valid recipients found. Message not sent."}, status.HTTP_400_BAD_REQUEST)
-
-        if failed_emails:
-            message_serializer = self.get_serializer(message)
-
-            return Response({
-                "message": message_serializer.data,
-                "failed_emails": failed_emails,
-                "error": f"Users with emails {', '.join(failed_emails)} do not exist, "
-                         f"the message was sent successfully to other recipients."}, status.HTTP_201_CREATED)
+        self.failed_emails = failed_emails
+        self.message = message
 
     def create(self, request, *args, **kwargs):
-        super().create(request, *args, **kwargs)
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        response = super().create(request, *args, **kwargs)
 
-        return self.perform_create(serializer)
+        if hasattr(self, 'failed_emails'):
+            failed_emails = self.failed_emails
+            message = self.message
+
+            if not message.recipients.count():
+                message.delete()
+                return Response({"error": "No valid recipients found. Message not sent."},
+                                status=status.HTTP_400_BAD_REQUEST)
+
+            if failed_emails:
+                message_serializer = self.get_serializer(message)
+                return Response({
+                    "message": message_serializer.data,
+                    "failed_emails": failed_emails,
+                    "error": f"Users with emails {', '.join(failed_emails)} do not exist, "
+                             f"the message was sent successfully to other recipients."
+                }, status=status.HTTP_201_CREATED)
+
+        return response
 
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter, filters.SearchFilter]
 
@@ -227,10 +236,11 @@ class MessageViewSet(viewsets.ModelViewSet):
         user = request.user
 
         try:
-            received_user_message = UserMessage.objects.get(message=message, user=user, is_recipient=True)
-            if not received_user_message.is_read:
-                received_user_message.is_read = True
-                received_user_message.save()
+            user_message = UserMessage.objects.get(message=message, user=user)
+
+            if not user_message.is_read:
+                user_message.is_read = True
+                user_message.save()
 
         except UserMessage.DoesNotExist:
             return Response({
@@ -238,7 +248,7 @@ class MessageViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_404_NOT_FOUND)
 
         message_serializer = self.get_serializer(message)
-        user_message_serializer = UserMessageSerializer(received_user_message)
+        user_message_serializer = UserMessageSerializer(user_message)
 
         return Response({
             "detail": "Message read successfully.",

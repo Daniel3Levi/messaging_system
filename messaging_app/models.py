@@ -35,4 +35,4 @@ class UserMessage(models.Model):
     is_read = models.BooleanField(default=False)
 
     def __str__(self):
-        return f"User: {self.user}, Message: {self.message.id}"
+        return f"User: {self.user} - isSender: {self.is_sender} - Message: {self.message.id}"
