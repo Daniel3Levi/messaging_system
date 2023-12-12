@@ -129,6 +129,9 @@ class MessageViewSet(viewsets.ModelViewSet):
         recipients_users = []
         failed_emails = []
 
+        # Avoid duplicate recipients
+        recipient_emails = list(set(recipient_emails))
+
         for email in recipient_emails:
             try:
                 user = CustomUser.objects.get(email=email)
